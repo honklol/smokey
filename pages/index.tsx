@@ -1,7 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
-import Head from 'next/head'
-import { useRef, useState, Fragment, use, useEffect } from 'react'
-import axios from 'axios'
+import Head from 'next/head';
+import { useEffect, useRef, useState } from 'react';
 import {
   Select,
   SelectContent,
@@ -10,58 +9,73 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { Button } from "@/components/ui/button"
-import { Input } from '@/components/ui/input'
-import fs from 'fs'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from '@/components/ui/input';
+import fs from 'fs';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
 interface Props {
   data: Config
 }
+
 export default function Home(props: Props) {
-  const [location, setLocation] = useState<string>(props.data.locations[0].locations[0].api)
-  const [selectedLocation, setSelectedLocation] = useState<LocationChild>(props.data.locations[0].locations[0])
-  const [type, setType] = useState<string>(`${selectedLocation.pingtrace ? 'ping' : selectedLocation.bgp ? 'bgp' : null}`)
-  const [disabled, setDisabled] = useState<boolean>(false)
-  const [data, setData] = useState<string>("")
-  const [error, setError] = useState<string>("")
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [location, setLocation] = useState<string>(props.data.locations[0].locations[0].api);
+  const [selectedLocation, setSelectedLocation] = useState<LocationChild>(props.data.locations[0].locations[0]);
+  const [type, setType] = useState<string>(`${selectedLocation.pingtrace ? 'ping' : selectedLocation.bgp ? 'bgp' : null}`);
+  const [disabled, setDisabled] = useState<boolean>(false);
+  const [data, setData] = useState<string>("");
+  const [error, setError] = useState<string>("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    wsRef.current = new WebSocket(`${location.replace('http', 'ws')}/lg`);
+
+    wsRef.current.addEventListener('message', (event) => {
+      const data = JSON.parse(event.data);
+      if (data.data) {
+        setData(data.data);
+      }
+      if (data.error) {
+        setError(data.error);
+      }
+    });
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [location]);
+
   useEffect(() => {
     props.data.locations.forEach((lcl) => {
       lcl.locations.forEach((lcl) => {
         if (lcl.api === location) {
-          setSelectedLocation(lcl)
-          setType(`${lcl.pingtrace ? 'ping' : lcl.bgp ? 'bgp' : null}`)
-          setDisabled(false)
-          setData("")
-          setError("")
+          setSelectedLocation(lcl);
+          setType(`${lcl.pingtrace ? 'ping' : lcl.bgp ? 'bgp' : null}`);
+          setDisabled(false);
+          setData("");
+          setError("");
         }
-      })
-    })
-  }, [location, props.data.locations])
-  useEffect(() => {
-    console.log(selectedLocation)
-  }, [selectedLocation])
+      });
+    });
+  }, [location, props.data.locations]);
+
   const submit = () => {
-    setError("")
-    setData("")
-    setDisabled(true)
-    axios.post(`${location}/lg`, {
-      target: inputRef && inputRef.current ? inputRef.current.value : "",
-      type
-    }).then((res) => {
-      setData(res.data.data)
-    }).catch((err) => {
-      try {
-        setError(err.response.data.error)
-      } catch (e) {
-        setError(err.toString())
-      }
-      console.log(error)
-    }).finally(() => {
-      setDisabled(false)
-    })
-  }
+    setError("");
+    setData("");
+    setDisabled(true);
+
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({
+        target: inputRef.current?.value,
+        type
+      }));
+    }
+  };
+
   return (
     <>
       <Head>
